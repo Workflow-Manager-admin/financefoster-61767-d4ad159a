@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
 // THEME COLORS (light blue palette for Goalie)
@@ -13,6 +13,13 @@ const COLORS = {
   border: '#c3d1e6',
   progressBg: '#e0eeff',
 };
+
+// Frequency types
+const FREQUENCIES = [
+  { label: 'Daily', value: 'day', plural: 'days' },
+  { label: 'Weekly', value: 'week', plural: 'weeks' },
+  { label: 'Monthly', value: 'month', plural: 'months' },
+];
 
 // PUBLIC_INTERFACE
 function App() {
@@ -51,10 +58,31 @@ function App() {
   // State: selected goal for details & habit builder
   const [selectedGoal, setSelectedGoal] = useState(null);
 
+  // State: savings frequency (user preference, default unset)
+  const [frequency, setFrequency] = useState(null);
+  // Persist frequency to localStorage (single device memory)
+  useEffect(() => {
+    const savedFreq = localStorage.getItem('goalie-user-frequency');
+    if (savedFreq && FREQUENCIES.some(f => f.value === savedFreq)) {
+      setFrequency(savedFreq);
+    }
+  }, []);
+  useEffect(() => {
+    if (frequency) {
+      localStorage.setItem('goalie-user-frequency', frequency);
+    }
+  }, [frequency]);
+  // State: trigger frequency modal on start or on user request
+  const [showFreqModal, setShowFreqModal] = useState(false);
+  useEffect(() => {
+    if (!frequency) setShowFreqModal(true);
+  }, [frequency]);
+  const startEditFrequency = () => setShowFreqModal(true);
+
+  // --- Core Handlers ---
   // PUBLIC_INTERFACE
   function handleCreateGoal(e) {
     e.preventDefault();
-    // Minor input validation
     if (!newGoal.name.trim() || !newGoal.target || !newGoal.deadline) return;
     setGoals([
       ...goals,
@@ -111,6 +139,114 @@ function App() {
     return Math.min(100, Math.round((goal.current / goal.target) * 100));
   }
 
+  // --- Per-period savings logic ---
+  // PUBLIC_INTERFACE
+  function calculatePeriodsLeft(goal) {
+    const now = new Date();
+    const end = new Date(goal.deadline);
+    if (isNaN(end.getTime()) || now > end) return 1;
+    // Calculate the difference in selected frequency
+    const ms = end - now;
+    switch (frequency) {
+      case 'day':
+        return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+      case 'week':
+        return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24 * 7)));
+      case 'month':
+        return Math.max(1, Math.ceil(
+          (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth())
+          + (end.getDate() >= now.getDate() ? 0 : -1)
+        ) + 1);
+      default:
+        return 1;
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  function getPerPeriodSavings(goal) {
+    const left = Math.max(0, goal.target - goal.current);
+    const periods = calculatePeriodsLeft(goal);
+    if (periods <= 0) return left;
+    return Math.ceil(left / periods);
+  }
+
+  // Get frequency label for display
+  function getPeriodLabel() {
+    const freq = FREQUENCIES.find(f => f.value === frequency);
+    return freq ? freq.label.toLowerCase() : '';
+  }
+
+  // --- Modal for Frequency Selection ---
+  function FrequencyModal({ show, frequency, setFrequency, onClose }) {
+    if (!show) return null;
+    return (
+      <div style={{
+        zIndex: 199,
+        position: 'fixed',
+        left: 0, top: 0, width: '100vw', height: '100vh', background: 'rgba(27,62,118,0.24)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }}>
+        <div style={{
+          background: COLORS.card,
+          padding: '32px 30px 24px 30px',
+          borderRadius: 14,
+          maxWidth: 340,
+          minWidth: 240,
+          boxShadow: '0 8px 24px 0 rgba(25,35,60,0.17)',
+          textAlign: 'center',
+          border: `2px solid ${COLORS.secondary}`,
+        }}>
+          <h2 style={{margin:"0 0 14px 0", color: COLORS.accent}}>
+            Choose your savings frequency
+          </h2>
+          <div style={{
+            fontSize: 16,
+            color: COLORS.textSecondary,
+            marginBottom: 22
+          }}>
+            How often do you want to track your savings towards your goals?
+            <br /><span style={{fontSize:13, color:COLORS.textSecondary, fontWeight:400}}>
+              (You can change this anytime in the dashboard)
+            </span>
+          </div>
+          <div style={{display: 'flex', justifyContent:'center', gap: 15, marginBottom: 24}}>
+            {FREQUENCIES.map(opt => (
+              <button
+                key={opt.value}
+                style={{
+                  ...btnStyle,
+                  boxShadow: frequency === opt.value ? `0 0 0 2px ${COLORS.primary}` : '',
+                  background: frequency === opt.value ? COLORS.primary : COLORS.secondary,
+                  color: '#fff',
+                  padding: "13px 18px",
+                  fontSize: "1.1rem"
+                }}
+                onClick={() => setFrequency(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div style={{margin: "6px 0"}}>
+            <button
+              style={{
+                ...btnStyle,
+                background: COLORS.textSecondary,
+                color: "#fff",
+                fontSize: 15,
+                marginTop: 8,
+                padding: '9px 17px'
+              }}
+              onClick={frequency ? onClose : undefined}
+              disabled={!frequency}
+            >Start Tracking</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Main ---
   return (
     <div
       style={{
@@ -121,6 +257,16 @@ function App() {
         flexDirection: 'column'
       }}
     >
+      {/* Frequency Modal */}
+      <FrequencyModal
+        show={showFreqModal}
+        frequency={frequency}
+        setFrequency={(freq) => {
+          setFrequency(freq);
+        }}
+        onClose={() => setShowFreqModal(false)}
+      />
+
       {/* Navbar */}
       <nav
         style={{
@@ -145,9 +291,25 @@ function App() {
               }}>🥅</span>
           <span>Goalie</span>
         </span>
-        <span style={{marginLeft: 'auto', fontWeight: 400, fontSize: '1rem', color: 'rgba(255,255,255,0.90)'}}>
+        <span style={{
+          marginLeft: 'auto',
+          fontWeight: 400,
+          fontSize: '1rem',
+          color: 'rgba(255,255,255,0.90)'
+        }}>
           Savings Goal Companion
         </span>
+        <button
+          style={{
+            ...btnStyle,
+            marginLeft: 22,
+            background: COLORS.secondary,
+            color: "#fff",
+            fontSize: 14,
+            padding: "7px 14px"
+          }}
+          onClick={startEditFrequency}
+        >Change Frequency</button>
       </nav>
 
       {/* Main Dashboard */}
@@ -187,6 +349,15 @@ function App() {
           <div style={{flex: 2, minWidth: 340}}>
             <h2 style={{fontWeight: 600, color: COLORS.accent, marginBottom: 12}}>
               Your Goals
+              {frequency &&
+                <span style={{
+                  marginLeft: 12,
+                  color: COLORS.textSecondary,
+                  fontWeight: 400,
+                  fontSize: 17
+                }}>
+                  (Showing required <b>{getPeriodLabel()}</b> savings)
+                </span>}
             </h2>
             {goals.length === 0 &&
               <div style={{margin: '32px 0', color: COLORS.textSecondary, fontStyle: 'italic'}}>
@@ -203,6 +374,8 @@ function App() {
                   key={goal.id}
                   goal={goal}
                   progress={getProgress(goal)}
+                  perPeriod={frequency ? getPerPeriodSavings(goal) : null}
+                  periodLabel={getPeriodLabel()}
                   onAddSavings={handleAddSavings}
                   onDelete={() => handleDeleteGoal(goal.id)}
                   onViewDetails={() => handleSelectGoal(goal)}
@@ -333,18 +506,8 @@ function App() {
 
 // GOAL CARD COMPONENT
 // PUBLIC_INTERFACE
-function GoalCard({ goal, progress, onAddSavings, onDelete, onViewDetails, accent, primary, secondary, cardColor }) {
+function GoalCard({ goal, progress, perPeriod, periodLabel, onAddSavings, onDelete, onViewDetails, accent, primary, secondary, cardColor }) {
   const [amount, setAmount] = useState('');
-
-  // Estimate monthly contribution via "smart calculator"
-  function getSuggestedContribution(goal) {
-    const now = new Date();
-    const end = new Date(goal.deadline);
-    const months = Math.ceil((end - now) / (1000*60*60*24*30));
-    const left = Math.max(0, goal.target - goal.current);
-    if (months <= 0) return left;
-    return Math.ceil(left / months);
-  }
 
   return (
     <div
@@ -392,6 +555,24 @@ function GoalCard({ goal, progress, onAddSavings, onDelete, onViewDetails, accen
         color:'#247', fontWeight:600, margin: '7px 0', fontSize:15.3
       }}>Saved: ₹{goal.current} / {goal.target}
       </div>
+      {/* Per-period savings */}
+      {perPeriod && (
+        <div style={{
+          color: secondary,
+          background: "#f3faff",
+          border: `1px solid ${secondary}44`,
+          fontWeight: 500,
+          fontSize: 14.4,
+          borderRadius: 7,
+          margin: "3px 0 2px 0",
+          padding: "6px 11px",
+          textAlign: "left",
+          display: "inline-block",
+          width: "fit-content"
+        }}>
+          Required per {periodLabel}: <b>₹{perPeriod}</b>
+        </div>
+      )}
       <div style={{display:'flex', alignItems:'center', gap:10}}>
         <input
           type="number"
@@ -421,11 +602,9 @@ function GoalCard({ goal, progress, onAddSavings, onDelete, onViewDetails, accen
         >Add</button>
       </div>
       <div style={{display:'flex', alignItems:'center', gap:7, fontSize:13.8, marginTop:7}}>
-        <span style={{color:secondary}}>Est. per month: ₹{getSuggestedContribution(goal)}</span>
         <button
           onClick={onViewDetails}
           style={{
-            marginLeft: 'auto',
             padding:'3px 10px',
             background: secondary,
             border: 'none',
@@ -458,7 +637,6 @@ function ProgressBar({ percentage, primary }) {
 // PIE CHART COMPONENT (SVG)
 // PUBLIC_INTERFACE
 function PieChart({ percentage, size = 36, primary, secondary }) {
-  // percentage: 0..100
   const r = size / 2 - 4; // 4px padding for stroke
   const circ = 2 * Math.PI * r;
   const prog = Math.max(0, Math.min(percentage, 100));

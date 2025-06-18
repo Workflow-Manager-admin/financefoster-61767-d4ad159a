@@ -21,8 +21,103 @@ const FREQUENCIES = [
   { label: 'Monthly', value: 'month', plural: 'months' },
 ];
 
+/**
+ * Modal prompting for initial user setup: monthly income and spending
+ * On submit, passes {income, spending} to setUserFinance
+ */
+function IncomeSpendingModal({ show, onSave, incomeDefault, spendingDefault, colors }) {
+  const [income, setIncome] = useState(incomeDefault || '');
+  const [spending, setSpending] = useState(spendingDefault || '');
+
+  useEffect(() => { setIncome(incomeDefault || ''); }, [incomeDefault]);
+  useEffect(() => { setSpending(spendingDefault || ''); }, [spendingDefault]);
+  if (!show) return null;
+  return (
+    <div style={{
+      zIndex: 200,
+      position: "fixed", inset: 0, background: "rgba(27,62,118,0.25)",
+      display: "flex", alignItems: "center", justifyContent: "center"
+    }}>
+      <div style={{
+        background: colors?.card || "#fff", borderRadius: 15, boxShadow: "0 8px 30px 0 rgba(36,62,88,0.14)",
+        maxWidth: 360, minWidth: 255, padding: "34px 28px 26px 28px", textAlign: "center",
+        border: `2px solid ${colors?.secondary || "#7ddfff"}`
+      }}>
+        <h2 style={{color: colors?.accent || "#4094e6", margin: "0 0 14px 0"}}>Get started with Goalie</h2>
+        <div style={{fontSize: 16.3, color: (colors?.textSecondary || "#6c7aa0"), marginBottom: 14}}>
+          Enter your monthly income and typical spending. <br/>
+          We'll help you set a smart, realistic savings plan!
+        </div>
+        <form onSubmit={e => {
+          e.preventDefault();
+          if (Number(income) > 0 && Number(spending) >= 0 && Number(income) >= Number(spending)) {
+            onSave(Number(income), Number(spending));
+          }
+        }} style={{display:"flex", flexDirection: "column", gap:16, alignItems:"center"}}>
+          <div style={{width:"100%", textAlign:"left"}}>
+            <label style={{fontWeight:500}}>Monthly Income (₹)<br/>
+              <input
+                type="number"
+                required
+                min={0}
+                value={income}
+                style={inputStyle}
+                onChange={e => setIncome(e.target.value)}
+                placeholder="e.g. 20000"
+              />
+            </label>
+          </div>
+          <div style={{width:"100%", textAlign:"left"}}>
+            <label style={{fontWeight:500}}>Monthly Spending (₹)<br/>
+              <input
+                type="number"
+                required
+                min={0}
+                value={spending}
+                style={inputStyle}
+                onChange={e => setSpending(e.target.value)}
+                placeholder="e.g. 16000"
+              />
+            </label>
+          </div>
+          <button type="submit"
+            style={{
+              ...btnStyle, marginTop:11,
+              background: colors?.primary || "#4094e6",
+              color: "#fff", minWidth:100
+            }}
+          >Save & Continue</button>
+        </form>
+        <div style={{fontSize:12, color:"#a99", marginTop:10}}>
+          We'll only use this data on this device. You can change it anytime in the dashboard.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // PUBLIC_INTERFACE
 function App() {
+  // --- USER FINANCE STATE ---
+  // Holds: income, spending, savings
+  const [userFinance, setUserFinance] = useState(() => {
+    // From localStorage for persistence
+    const stored = localStorage.getItem('goalie-user-finance');
+    if (stored) try {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed === "object" && parsed.income != null && parsed.spending != null) {
+        return { income: Number(parsed.income), spending: Number(parsed.spending) };
+      }
+    } catch {}
+    return null;
+  });
+
+  // On set: update localStorage
+  useEffect(() => {
+    if (userFinance) localStorage.setItem('goalie-user-finance', JSON.stringify(userFinance));
+  }, [userFinance]);
+
+  // =========== EXISTING STATE BELOW ===========
   // State: array of goal objects
   const [goals, setGoals] = useState([
     // DEMO DATA for initial view
@@ -79,8 +174,64 @@ function App() {
   }, [frequency]);
   const startEditFrequency = () => setShowFreqModal(true);
 
+  // --- Income & Available Savings Logic ---
+
+  // Display modal until both userFinance and frequency selected
+  const needsUserFinance = !userFinance || userFinance.income === 0;
+
+  // If either unset, block app with modal
+  if (needsUserFinance) {
+    return (
+      <IncomeSpendingModal
+        show={true}
+        onSave={(income, spending) => setUserFinance({ income, spending })}
+        incomeDefault={userFinance?.income}
+        spendingDefault={userFinance?.spending}
+        colors={COLORS}
+      />
+    );
+  }
+
+  // Derived: available savings per month
+  const availableSavings = Math.max(0, (userFinance.income || 0) - (userFinance.spending || 0));
+
+  // Helper: frequency multiplier (converts 'per month' to per frequency)
+  // For splitting monthly available savings into per-frequency intervals
+  function frequencyToPeriodsPerMonth(type) {
+    switch (type) {
+      case "day":   return 30;
+      case "week":  return 4.345; // avg weeks per month
+      case "month": return 1;
+      default: return 1;
+    }
+  }
+
+  // -- Distribute available savings equally across all "active" goals
+  // (If prioritization: TODO, for now treat all as active, equally)
+  const activeGoals = goals.length === 0 ? [] : goals.filter(g => (g.target > g.current));
+  const perGoalMonthly = activeGoals.length > 0 ? availableSavings / activeGoals.length : 0;
+
+  // For each goal: convert per-goal monthly savings to per period, per frequency
+  function getPerGoalPerPeriodAmount(goal) {
+    if (!frequency) return null;
+    // Amount left to save for this goal
+    const goalLeft = Math.max(0, goal.target - goal.current);
+    // Split monthly available *equally* across all active goals
+    const periodsInMonth = frequencyToPeriodsPerMonth(frequency);
+    // If perGoalMonthly > what's needed for this goal, limit by target (prefer not to over-allocate)
+    const perPeriodBase = perGoalMonthly / periodsInMonth;
+
+    // For this period, choose the min needed so not to "over-save" when close to goal
+    // But don't go below 0. (per period should never be more than what's left for the goal)
+    const remainingPeriods = calculatePeriodsLeft(goal);
+
+    // Projected remaining per-period needed to complete goal in time
+    const projectedPerPeriod = goalLeft / remainingPeriods;
+    // We recommend the smaller: what user can afford (based on income/other goals), or what is needed to stay on target for the deadline
+    return Math.round(Math.min(perPeriodBase, projectedPerPeriod)*100)/100;
+  }
+
   // --- Core Handlers ---
-  // PUBLIC_INTERFACE
   function handleCreateGoal(e) {
     e.preventDefault();
     if (!newGoal.name.trim() || !newGoal.target || !newGoal.deadline) return;
@@ -97,13 +248,11 @@ function App() {
     setNewGoal({ name: '', target: '', deadline: '' });
   }
 
-  // PUBLIC_INTERFACE
   function handleDeleteGoal(id) {
     setGoals(goals.filter(goal => goal.id !== id));
     if (selectedGoal && selectedGoal.id === id) setSelectedGoal(null);
   }
 
-  // PUBLIC_INTERFACE
   function handleAddSavings(goalId, amount) {
     setGoals(goals.map(goal => goal.id === goalId
       ? { ...goal, current: Math.min(goal.target, goal.current + Number(amount)) }
@@ -111,17 +260,12 @@ function App() {
     ));
   }
 
-  // PUBLIC_INTERFACE
   function handleSelectGoal(goal) {
     setSelectedGoal(goal);
   }
-
-  // PUBLIC_INTERFACE
   function handleCloseGoalDetail() {
     setSelectedGoal(null);
   }
-
-  // PUBLIC_INTERFACE
   function handleHabitAction(goalId, suggested) {
     handleAddSavings(goalId, suggested);
     setReminders([
@@ -133,14 +277,11 @@ function App() {
       }
     ]);
   }
-
   // Helper: Calculate progress percentage
   function getProgress(goal) {
     return Math.min(100, Math.round((goal.current / goal.target) * 100));
   }
-
-  // --- Per-period savings logic ---
-  // PUBLIC_INTERFACE
+  // Calculate number of periods left for a goal
   function calculatePeriodsLeft(goal) {
     const now = new Date();
     const end = new Date(goal.deadline);
@@ -161,16 +302,7 @@ function App() {
         return 1;
     }
   }
-
-  // PUBLIC_INTERFACE
-  function getPerPeriodSavings(goal) {
-    const left = Math.max(0, goal.target - goal.current);
-    const periods = calculatePeriodsLeft(goal);
-    if (periods <= 0) return left;
-    return Math.ceil(left / periods);
-  }
-
-  // Get frequency label for display
+  // Frequency display label
   function getPeriodLabel() {
     const freq = FREQUENCIES.find(f => f.value === frequency);
     return freq ? freq.label.toLowerCase() : '';
@@ -338,6 +470,36 @@ function App() {
           </div>
         </section>
 
+        {/* Available Savings Summary */}
+        <div style={{
+          marginBottom: 32, display:"flex", alignItems:"center", gap:22, flexWrap:"wrap"
+        }}>
+          <div style={{
+            background:COLORS.card, color: COLORS.text, borderRadius: 9,
+            border: `1.5px solid ${COLORS.secondary}`,
+            padding: "16px 34px 14px 20px", fontWeight:500, fontSize: 16,
+            boxShadow:"0 1px 10px 0 rgba(60,180,215,0.07)"
+          }}>
+            <span style={{color:COLORS.secondary, fontWeight: 800}}>₹{userFinance.income}</span> income / 
+            <span style={{color:"#c45252", fontWeight: 600}}>₹{userFinance.spending}</span> spending. 
+            <span style={{
+              color: availableSavings > 0 ? COLORS.primary : "#a88",
+              fontWeight: availableSavings > 0 ? 700 : 500,
+              marginLeft: 18
+            }}>
+              You can save: <b>₹{availableSavings}</b> /month
+            </span>
+          </div>
+          <button
+            style={{
+              ...btnStyle, background:COLORS.secondary, color:"#fff", padding:"9px 17px", fontSize:15
+            }}
+            onClick={() => {
+              // Reset for re-prompt
+              setUserFinance(null);
+            }}
+          >Edit income/spending</button>
+        </div>
         {/* Goal Creation & Goals List - Layout */}
         <div style={{
           display: 'flex',
@@ -356,7 +518,7 @@ function App() {
                   fontWeight: 400,
                   fontSize: 17
                 }}>
-                  (Showing required <b>{getPeriodLabel()}</b> savings)
+                  (Showing suggested <b>{getPeriodLabel()}</b> savings per goal)
                 </span>}
             </h2>
             {goals.length === 0 &&
@@ -374,7 +536,7 @@ function App() {
                   key={goal.id}
                   goal={goal}
                   progress={getProgress(goal)}
-                  perPeriod={frequency ? getPerPeriodSavings(goal) : null}
+                  perPeriod={frequency ? getPerGoalPerPeriodAmount(goal) : null}
                   periodLabel={getPeriodLabel()}
                   onAddSavings={handleAddSavings}
                   onDelete={() => handleDeleteGoal(goal.id)}
@@ -504,11 +666,13 @@ function App() {
   );
 }
 
-// GOAL CARD COMPONENT
-// PUBLIC_INTERFACE
+/**
+ * GoalCard: Shows progress and dynamic per-period suggestions
+ */
 function GoalCard({ goal, progress, perPeriod, periodLabel, onAddSavings, onDelete, onViewDetails, accent, primary, secondary, cardColor }) {
   const [amount, setAmount] = useState('');
 
+  // PieChart always active/visible for all goals
   return (
     <div
       style={{
@@ -544,35 +708,38 @@ function GoalCard({ goal, progress, perPeriod, periodLabel, onAddSavings, onDele
       </div>
       <div style={{display:"flex", alignItems: "center", gap: 12, marginBottom: 4, marginTop: 2}}>
         <ProgressBar percentage={progress} primary={primary} />
+        {/* PieChart is ALWAYS visible, and updates live */}
         <PieChart
           percentage={progress}
-          size={32}
+          size={36}
           primary={primary}
           secondary={secondary}
         />
       </div>
       <div style={{
         color:'#247', fontWeight:600, margin: '7px 0', fontSize:15.3
-      }}>Saved: ₹{goal.current} / {goal.target}
+      }}>
+        Saved: ₹{goal.current} / {goal.target}
       </div>
-      {/* Per-period savings */}
-      {perPeriod && (
-        <div style={{
-          color: secondary,
-          background: "#f3faff",
-          border: `1px solid ${secondary}44`,
-          fontWeight: 500,
-          fontSize: 14.4,
-          borderRadius: 7,
-          margin: "3px 0 2px 0",
-          padding: "6px 11px",
-          textAlign: "left",
-          display: "inline-block",
-          width: "fit-content"
-        }}>
-          Required per {periodLabel}: <b>₹{perPeriod}</b>
-        </div>
-      )}
+      {/* Per-period savings, improved explanation */}
+      <div style={{
+        color: secondary,
+        background: "#f3faff",
+        border: `1px solid ${secondary}44`,
+        fontWeight: 500,
+        fontSize: 14.4,
+        borderRadius: 7,
+        margin: "5px 0 2px 0",
+        padding: "6px 12px",
+        textAlign: "left",
+        display: "inline-block",
+        width: "fit-content"
+      }}>
+        {perPeriod != null
+          ? <>Recommended per {periodLabel} saving: <b>₹{perPeriod}</b></>
+          : <>Set a frequency to get per-period amount!</>
+        }
+      </div>
       <div style={{display:'flex', alignItems:'center', gap:10}}>
         <input
           type="number"

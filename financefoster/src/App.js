@@ -25,7 +25,7 @@ const FREQUENCIES = [
  * Modal prompting for initial user setup: monthly income and spending
  * On submit, passes {income, spending} to setUserFinance
  */
-function IncomeSpendingModal({ show, onSave, incomeDefault, spendingDefault, colors }) {
+function IncomeSpendingModal({ show, onSave, incomeDefault, spendingDefault }) {
   const [income, setIncome] = useState(incomeDefault || '');
   const [spending, setSpending] = useState(spendingDefault || '');
 
@@ -33,63 +33,97 @@ function IncomeSpendingModal({ show, onSave, incomeDefault, spendingDefault, col
   useEffect(() => { setSpending(spendingDefault || ''); }, [spendingDefault]);
   if (!show) return null;
   return (
-    <div style={{
-      zIndex: 200,
-      position: "fixed", inset: 0, background: "rgba(27,62,118,0.25)",
-      display: "flex", alignItems: "center", justifyContent: "center"
+    <div className="modal-backdrop" style={{
+      zIndex: 200
     }}>
-      <div style={{
-        background: colors?.card || "#fff", borderRadius: 15, boxShadow: "0 8px 30px 0 rgba(36,62,88,0.14)",
-        maxWidth: 360, minWidth: 255, padding: "34px 28px 26px 28px", textAlign: "center",
-        border: `2px solid ${colors?.secondary || "#7ddfff"}`
+      <div className="modal-content" style={{
+        boxShadow: "0 12px 49px 0 rgba(36,62,88,0.17)",
+        border: "2.3px solid var(--base-light)",
+        background: "linear-gradient(110deg, #fff 85%, #eaf6ff 100%)"
       }}>
-        <h2 style={{color: colors?.accent || "#4094e6", margin: "0 0 14px 0"}}>Get started with Goalie</h2>
-        <div style={{fontSize: 16.3, color: (colors?.textSecondary || "#6c7aa0"), marginBottom: 14}}>
-          Enter your monthly income and typical spending. <br/>
-          We'll help you set a smart, realistic savings plan!
+        <h2 style={{
+          color: "var(--base-dark)",
+          fontWeight: 700, 
+          margin: "0 0 19px 0",
+          fontFamily: '"Quicksand","Inter",sans-serif'
+        }}>Get started with Goalie</h2>
+        <div style={{
+          fontSize: 16.6,
+          color: "var(--text-secondary)",
+          marginBottom: 18
+        }}>
+          Enter your monthly income and typical spending.<br/>
+          <span style={{ fontWeight: 600 }}>We'll help you set a smart, realistic savings plan!</span>
         </div>
         <form onSubmit={e => {
           e.preventDefault();
           if (Number(income) > 0 && Number(spending) >= 0 && Number(income) >= Number(spending)) {
             onSave(Number(income), Number(spending));
           }
-        }} style={{display:"flex", flexDirection: "column", gap:16, alignItems:"center"}}>
+        }} style={{display: "flex", flexDirection: "column", gap: 15, alignItems: "center"}}>
           <div style={{width:"100%", textAlign:"left"}}>
-            <label style={{fontWeight:500}}>Monthly Income (₹)<br/>
+            <label style={{fontWeight:600, fontFamily:'inherit'}}>Monthly Income (₹)<br/>
               <input
+                className="input-rounded"
                 type="number"
                 required
                 min={0}
                 value={income}
-                style={inputStyle}
+                style={{
+                  width:'100%',
+                  fontSize: '1em',
+                  padding: '9px 13px',
+                  margin: '4px 0 9px 0',
+                  border: '1.25px solid var(--border-color)',
+                  borderRadius: 10,
+                  background: '#f7fbff',
+                  color:'#232540'
+                }}
                 onChange={e => setIncome(e.target.value)}
                 placeholder="e.g. 20000"
               />
             </label>
           </div>
           <div style={{width:"100%", textAlign:"left"}}>
-            <label style={{fontWeight:500}}>Monthly Spending (₹)<br/>
+            <label style={{fontWeight:600, fontFamily:'inherit'}}>Monthly Spending (₹)<br/>
               <input
+                className="input-rounded"
                 type="number"
                 required
                 min={0}
                 value={spending}
-                style={inputStyle}
+                style={{
+                  width:'100%',
+                  fontSize: '1em',
+                  padding: '9px 13px',
+                  margin: '4px 0 9px 0',
+                  border: '1.25px solid var(--border-color)',
+                  borderRadius: 10,
+                  background: '#f7fbff',
+                  color:'#232540'
+                }}
                 onChange={e => setSpending(e.target.value)}
                 placeholder="e.g. 16000"
               />
             </label>
           </div>
           <button type="submit"
+            className="btn"
             style={{
-              ...btnStyle, marginTop:11,
-              background: colors?.primary || "#4094e6",
-              color: "#fff", minWidth:100
+              marginTop: 12,
+              boxShadow: "0 1px 12px 0 #b4f2ff22",
+              minWidth: 110,
+              fontSize: "1.11em",
+              borderRadius: 26
             }}
           >Save & Continue</button>
         </form>
-        <div style={{fontSize:12, color:"#a99", marginTop:10}}>
-          We'll only use this data on this device. You can change it anytime in the dashboard.
+        <div style={{
+          fontSize: 12.5,
+          color: "#98a4ab",
+          marginTop: 15
+        }}>
+          Data is stored locally. You can change it anytime in the dashboard.
         </div>
       </div>
     </div>
@@ -312,46 +346,54 @@ function App() {
   function FrequencyModal({ show, frequency, setFrequency, onClose }) {
     if (!show) return null;
     return (
-      <div style={{
-        zIndex: 199,
-        position: 'fixed',
-        left: 0, top: 0, width: '100vw', height: '100vh', background: 'rgba(27,62,118,0.24)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center'
-      }}>
-        <div style={{
-          background: COLORS.card,
-          padding: '32px 30px 24px 30px',
-          borderRadius: 14,
-          maxWidth: 340,
-          minWidth: 240,
-          boxShadow: '0 8px 24px 0 rgba(25,35,60,0.17)',
-          textAlign: 'center',
-          border: `2px solid ${COLORS.secondary}`,
+      <div className="modal-backdrop" style={{zIndex: 199}}>
+        <div className="modal-content" style={{
+          boxShadow: "0 12px 49px 0 rgba(17,54,120,0.19)",
+          border: "2.2px solid var(--base-light)",
+          background: "linear-gradient(120deg,#fff 87%,#e9f8fb 100%)",
+          minWidth: 210,
+          maxWidth: 355,
+          padding: "39px 30px 24px 29px"
         }}>
-          <h2 style={{margin:"0 0 14px 0", color: COLORS.accent}}>
+          <h2 style={{
+            margin:"0 0 17px 0",
+            color: "var(--base-dark)",
+            fontWeight: 700,
+            fontFamily: '"Quicksand","Inter",sans-serif'
+          }}>
             Choose your savings frequency
           </h2>
           <div style={{
             fontSize: 16,
-            color: COLORS.textSecondary,
-            marginBottom: 22
+            color: "var(--text-secondary)",
+            marginBottom: 17
           }}>
             How often do you want to track your savings towards your goals?
-            <br /><span style={{fontSize:13, color:COLORS.textSecondary, fontWeight:400}}>
+            <br />
+            <span style={{
+              fontSize:13, color: "var(--text-secondary)", fontWeight: 400
+            }}>
               (You can change this anytime in the dashboard)
             </span>
           </div>
-          <div style={{display: 'flex', justifyContent:'center', gap: 15, marginBottom: 24}}>
+          <div style={{display: 'flex', justifyContent:'center', gap: 14, marginBottom: 20}}>
             {FREQUENCIES.map(opt => (
               <button
                 key={opt.value}
+                className="btn"
                 style={{
-                  ...btnStyle,
-                  boxShadow: frequency === opt.value ? `0 0 0 2px ${COLORS.primary}` : '',
-                  background: frequency === opt.value ? COLORS.primary : COLORS.secondary,
-                  color: '#fff',
-                  padding: "13px 18px",
-                  fontSize: "1.1rem"
+                  background: frequency === opt.value
+                    ? "linear-gradient(100deg, var(--base-dark) 70%, var(--base-light) 120%)"
+                    : "linear-gradient(95deg,var(--base-light) 75%,#d2ecfa 110%)",
+                  color: frequency === opt.value ? "#fff" : "#336",
+                  fontWeight: frequency === opt.value ? 800 : 600,
+                  padding: "13px 23px",
+                  fontSize: "1.08rem",
+                  borderRadius: 26,
+                  outline: frequency === opt.value ? "2.5px solid var(--base-dark)" : "",
+                  border: "none",
+                  boxShadow: frequency === opt.value ? "0 0 0 2px #c2e4fc73" : "0 1px 10px #c6ddfa12",
+                  transition: "background 0.17s, box-shadow 0.18s"
                 }}
                 onClick={() => setFrequency(opt.value)}
               >
@@ -361,13 +403,16 @@ function App() {
           </div>
           <div style={{margin: "6px 0"}}>
             <button
+              className="btn"
               style={{
-                ...btnStyle,
-                background: COLORS.textSecondary,
+                background: "linear-gradient(94deg, #bad5fc 55%, var(--base-dark) 130%)",
                 color: "#fff",
                 fontSize: 15,
-                marginTop: 8,
-                padding: '9px 17px'
+                marginTop: 6,
+                padding: '10px 26px',
+                borderRadius: 26,
+                fontWeight: 700,
+                opacity: frequency ? 1 : 0.7
               }}
               onClick={frequency ? onClose : undefined}
               disabled={!frequency}
@@ -789,64 +834,99 @@ function GoalCard({ goal, progress, perPeriod, periodLabel, onAddSavings, onDele
 // PUBLIC_INTERFACE
 function ProgressBar({ percentage, primary }) {
   return (
-    <div style={{width:'100%', background:'#F1F4F8', borderRadius:5, height: 9, marginBottom: 5}}>
-      <div style={{
-        width: `${percentage}%`,
-        background: `linear-gradient(90deg, ${primary} 60%, #B2DFDB 100%)`,
-        height: '100%',
-        borderRadius: 5,
-        transition:'width .5s'
-      }}/>
+    <div className="progress-bar-bg" style={{
+      width: '100%',
+      height: 12,
+      background: "#e9f4fc",
+      borderRadius: 9,
+      marginBottom: 7,
+      position: "relative",
+      boxShadow: "0 1px 6px #b6d6ea2c"
+    }}>
+      <div className="progress-bar-fill"
+        style={{
+          width: `${percentage}%`,
+          background: `linear-gradient(95deg, ${primary} 60%, #bfeeff 98%)`,
+          height: "100%",
+          borderRadius: 9,
+          transition: "width 0.46s cubic-bezier(.53,1.32,.33,.87),background 0.20s"
+        }}
+      />
     </div>
   );
 }
 
 // PIE CHART COMPONENT (SVG)
 // PUBLIC_INTERFACE
-function PieChart({ percentage, size = 36, primary, secondary }) {
-  const r = size / 2 - 4; // 4px padding for stroke
+function PieChart({ percentage, size = 44, primary, secondary }) {
+  // Modern pastel+highlight donut visualization
+  const r = size / 2 - 7;
   const circ = 2 * Math.PI * r;
   const prog = Math.max(0, Math.min(percentage, 100));
   const offset = circ * (1 - prog / 100);
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {/* Track circle */}
-      <circle
-        cx={size/2}
-        cy={size/2}
-        r={r}
-        fill="none"
-        stroke={secondary}
-        strokeWidth="6"
-        opacity={0.22}
-      />
-      {/* Progress circle */}
-      <circle
-        cx={size/2}
-        cy={size/2}
-        r={r}
-        fill="none"
-        stroke={primary}
-        strokeWidth="6"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size/2} ${size/2})`}
-      />
-      {/* Percentage Text */}
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dy=".38em"
-        fontSize={size * 0.32}
-        fill={primary}
-        fontWeight="700"
-      >
-        {`${prog}%`}
-      </text>
-    </svg>
+    <div
+      className="pie-chart"
+      style={{
+        width: size + 12,
+        height: size + 12,
+        display: "inline-block",
+        background: "linear-gradient(120deg,#f7fbfe 65%,#b3eafd 100%)",
+        borderRadius: "50%",
+        boxShadow: "0 1px 8px 0 #8ed9f112"
+      }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* Track circle background */}
+        <circle
+          cx={size/2}
+          cy={size/2}
+          r={r}
+          fill="none"
+          stroke="#e3f2fa"
+          strokeWidth="8"
+          opacity={0.53}
+        />
+        {/* Progress ring */}
+        <circle
+          cx={size/2}
+          cy={size/2}
+          r={r}
+          fill="none"
+          stroke={`url(#pie-gradient)`}
+          strokeWidth="8"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size/2} ${size/2})`}
+          style={{
+            filter: "drop-shadow(0 1px 7px #b9eaff30)"
+          }}
+        />
+        <defs>
+          <linearGradient id="pie-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={primary} />
+            <stop offset="100%" stopColor={secondary} />
+          </linearGradient>
+        </defs>
+        {/* Percentage text */}
+        <text
+          x="50%"
+          y="50%"
+          textAnchor="middle"
+          dy=".35em"
+          fontSize={size * 0.31}
+          fill={primary}
+          fontWeight="700"
+          style={{
+            fontFamily: '"Quicksand","Inter",sans-serif',
+            textShadow: "0 2px 8px #b7e0fa26"
+          }}
+        >
+          {`${prog}%`}
+        </text>
+      </svg>
+    </div>
   );
 }
 

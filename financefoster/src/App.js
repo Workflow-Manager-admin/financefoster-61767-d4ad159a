@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import './App.css';
 
-// THEME COLORS
+// THEME COLORS (light blue palette for Goalie)
 const COLORS = {
-  primary: '#4CAF50',
-  secondary: '#FFC107',
-  accent: '#2196F3',
-  background: '#F4F6FA',
-  card: '#FFFFFF',
-  text: '#222222',
-  textSecondary: '#4a4a4a',
-  border: '#E0E5ED',
-  progressBg: '#E6E6E6',
+  primary: '#4094e6',       // Soothing blue
+  secondary: '#7ddfff',     // Cyan accent
+  accent: '#1155d4',        // Deep blue for highlights
+  background: '#f4f9ff',    // Offwhite/blue background
+  card: '#ffffff',
+  text: '#263047',
+  textSecondary: '#6c7aa0',
+  border: '#c3d1e6',
+  progressBg: '#e0eeff',
 };
 
 // PUBLIC_INTERFACE
@@ -132,21 +132,21 @@ function App() {
           position: 'sticky',
           top: 0,
           zIndex: 10,
-          boxShadow: '0 0 8px rgba(76,175,80,0.07)',
+          boxShadow: '0 0 8px rgba(64,148,230,0.07)',
           display: 'flex',
           alignItems: 'center'
         }}>
         <span style={{letterSpacing: 1, display: 'flex', alignItems: 'center'}}>
           <span style={{
                 marginRight: 12,
-                color: COLORS.accent,
+                color: COLORS.secondary,
                 fontWeight: 900,
                 fontSize: '1.4em'
-              }}>₹</span>
-          <span>FinanceFoster</span>
+              }}>🥅</span>
+          <span>Goalie</span>
         </span>
-        <span style={{marginLeft: 'auto', fontWeight: 400, fontSize: '1rem', color: 'rgba(255,255,255,0.85)'}}>
-          Personal Finance Companion
+        <span style={{marginLeft: 'auto', fontWeight: 400, fontSize: '1rem', color: 'rgba(255,255,255,0.90)'}}>
+          Savings Goal Companion
         </span>
       </nav>
 
@@ -167,12 +167,12 @@ function App() {
             fontSize: "2.2em",
             margin: 0,
             letterSpacing: 0.6,
-            color: COLORS.primary
+            color: COLORS.accent
           }}>
-            Student-friendly goal planner & savings tracker
+            Goalie: Personal savings goals, made visual & fun
           </h1>
           <div style={{color: COLORS.textSecondary, maxWidth: 700, margin: '16px 0', fontSize: "1.1em"}}>
-            Set financial goals, track progress visually, build healthy money-saving habits with reminders, and enjoy total privacy—no bank/UPI link required!
+            Set your dreams, track savings progress with visual pie charts, build great habits—no bank details required!
           </div>
         </section>
 
@@ -183,7 +183,6 @@ function App() {
           alignItems: 'flex-start',
           flexWrap: 'wrap'
         }}>
-
           {/* Goals List / Cards */}
           <div style={{flex: 2, minWidth: 340}}>
             <h2 style={{fontWeight: 600, color: COLORS.accent, marginBottom: 12}}>
@@ -274,7 +273,6 @@ function App() {
             </form>
           </div>
         </div>
-
         {/* Reminders & Habit Section */}
         <div style={{marginTop: 48}}>
           <div style={{display:'flex', alignItems:'flex-start', gap:40, flexWrap:'wrap'}}>
@@ -321,10 +319,13 @@ function App() {
       <footer style={{
         padding: 18,
         textAlign: 'center',
-        color: COLORS.textSecondary,
-        fontSize: '1em'
+        color: COLORS.accent,
+        background: "#eaf4ff",
+        fontSize: '1em',
+        borderTop: `1.5px solid ${COLORS.border}`,
+        marginTop: 30
       }}>
-        FinanceFoster &middot; No bank/UPI link required &middot; Designed for students &amp; young professionals
+        Goalie &middot; Track savings visually &middot; No bank account needed &middot; For students & dreamers
       </footer>
     </div>
   );
@@ -378,7 +379,15 @@ function GoalCard({ goal, progress, onAddSavings, onDelete, onViewDetails, accen
         Target: <b>₹{goal.target}</b> &nbsp;&nbsp; | &nbsp;&nbsp;
         Deadline: <span style={{color:accent}}>{goal.deadline}</span>
       </div>
-      <ProgressBar percentage={progress} primary={primary} />
+      <div style={{display:"flex", alignItems: "center", gap: 12, marginBottom: 4, marginTop: 2}}>
+        <ProgressBar percentage={progress} primary={primary} />
+        <PieChart
+          percentage={progress}
+          size={32}
+          primary={primary}
+          secondary={secondary}
+        />
+      </div>
       <div style={{
         color:'#247', fontWeight:600, margin: '7px 0', fontSize:15.3
       }}>Saved: ₹{goal.current} / {goal.target}
@@ -443,6 +452,56 @@ function ProgressBar({ percentage, primary }) {
         transition:'width .5s'
       }}/>
     </div>
+  );
+}
+
+// PIE CHART COMPONENT (SVG)
+// PUBLIC_INTERFACE
+function PieChart({ percentage, size = 36, primary, secondary }) {
+  // percentage: 0..100
+  const r = size / 2 - 4; // 4px padding for stroke
+  const circ = 2 * Math.PI * r;
+  const prog = Math.max(0, Math.min(percentage, 100));
+  const offset = circ * (1 - prog / 100);
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {/* Track circle */}
+      <circle
+        cx={size/2}
+        cy={size/2}
+        r={r}
+        fill="none"
+        stroke={secondary}
+        strokeWidth="6"
+        opacity={0.22}
+      />
+      {/* Progress circle */}
+      <circle
+        cx={size/2}
+        cy={size/2}
+        r={r}
+        fill="none"
+        stroke={primary}
+        strokeWidth="6"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size/2} ${size/2})`}
+      />
+      {/* Percentage Text */}
+      <text
+        x="50%"
+        y="50%"
+        textAnchor="middle"
+        dy=".38em"
+        fontSize={size * 0.32}
+        fill={primary}
+        fontWeight="700"
+      >
+        {`${prog}%`}
+      </text>
+    </svg>
   );
 }
 

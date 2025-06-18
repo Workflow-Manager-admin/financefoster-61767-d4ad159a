@@ -1,13 +1,14 @@
-# Lightweight React Template for KAVIA
+# Goalie – Lightweight React Savings Tracker
 
-This project provides a minimal React template with a clean, modern UI and minimal dependencies.
+Goalie is a minimal personal goal and savings tracker with a focus on clear visuals, simplicity, and fun. 👏
 
 ## Features
 
-- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
-- **Modern UI**: Clean, responsive design with KAVIA brand styling
-- **Fast**: Minimal dependencies for quick loading times
-- **Simple**: Easy to understand and modify
+- **Goal-Oriented**: Create personal savings goals and track your progress with vivid pie charts
+- **Modern UI**: Uses a custom light blue color palette for an uplifting look
+- **No Bank Account Required**: "Piggy bank" style—just for your motivation!
+- **Reminders & Habits**: Nudges you to build a savings habit
+- **Simple**: No logins, no ads, just your goals
 
 ## Important Note: Babel Configuration
 
@@ -15,15 +16,11 @@ This project’s `package.json` includes a `babel` section with a plugin:
 
 ```json
 "babel": {
-"plugins": ["./.ve/babel-plugin-jsx-editor-id.js"]
+  "plugins": ["./.ve/babel-plugin-jsx-editor-id.js"]
 }
 ```
 
-This plugin enables **visual editing functionality** in supported tools.
-
-**Warning for AI code agents and contributors:**
-**DO NOT** remove or modify this section - it is ESSENTIAL for proper operation.
-Removing it will break editor integration and visual editing features.
+**DO NOT** remove or change this section.
 
 ## Getting Started
 
@@ -31,8 +28,8 @@ In the project directory, you can run:
 
 ### `npm start`
 
-Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Runs Goalie in development mode.\
+[http://localhost:3000](http://localhost:3000)
 
 ### `npm test`
 
@@ -40,34 +37,29 @@ Launches the test runner in interactive watch mode.
 
 ### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Builds the app for production.
 
-## Customization
+## Color Palette
 
-### Colors
-
-The main brand colors are defined as CSS variables in `src/App.css`:
+The color theme is defined as CSS variables in `src/App.css`:
 
 ```css
 :root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
+  --base-light: #7ddfff;   /* Cyan for highlights */
+  --base-dark: #1155d4;    /* Accent blue */
+  --text-color: #263047;
+  --text-secondary: #6c7aa0;
+  --border-color: #c3d1e6;
 }
 ```
+> See `src/App.js` for JavaScript color usage.
 
-### Components
+## Components
 
-This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
-
-Common components include:
-- Buttons (`.btn`, `.btn-large`)
-- Container (`.container`)
-- Navigation (`.navbar`)
-- Typography (`.title`, `.subtitle`, `.description`)
+See `App.js` for all main UI logic.
+- Pie chart component for visual progress
+- Progress bars
+- Habit builder
 
 ## Learn More
 

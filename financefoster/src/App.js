@@ -1,5 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+
+// Google API constants
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE";
+const GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY_HERE";
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events";
+const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest";
+
+// Load Google Script dynamically
+function useGoogleScript() {
+  useEffect(() => {
+    if (!window.gapi) {
+      const script = document.createElement("script");
+      script.src = "https://apis.google.com/js/api.js";
+      script.async = true;
+      script.onload = () => { /* loaded */ };
+      document.body.appendChild(script);
+    }
+  }, []);
+}
 
 // THEME COLORS (light blue palette for Goalie)
 const COLORS = {
@@ -130,7 +149,163 @@ function IncomeSpendingModal({ show, onSave, incomeDefault, spendingDefault }) {
   );
 }
 
+/** ===============================================
+ *              GOOGLE CALENDAR HOOK
+ * Centralizes authentication & API logic.
+ * ============================================== */
 // PUBLIC_INTERFACE
+function useGoogleCalendar() {
+  const [gapiLoaded, setGapiLoaded] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authInstance, setAuthInstance] = useState(null);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+
+  useGoogleScript();
+
+  // Load gapi and initialize client
+  useEffect(() => {
+    function initClient() {
+      window.gapi.client
+        .init({
+          apiKey: GOOGLE_API_KEY,
+          clientId: GOOGLE_CLIENT_ID,
+          discoveryDocs: [DISCOVERY_DOC],
+          scope: GOOGLE_SCOPES,
+        })
+        .then(() => {
+          setGapiLoaded(true);
+          const auth = window.gapi.auth2.getAuthInstance();
+          setAuthInstance(auth);
+          setSignedIn(auth.isSignedIn.get());
+          setUser(auth.currentUser.get().getBasicProfile());
+          // Listen for sign-in state changes.
+          auth.isSignedIn.listen((val) => {
+            setSignedIn(val);
+            setUser(val ? auth.currentUser.get().getBasicProfile() : null);
+          });
+        })
+        .catch((e) => setError("Failed to initialize Google API: " + String(e)));
+    }
+
+    if (window.gapi && window.gapi.client && !gapiLoaded) {
+      window.gapi.load("client:auth2", initClient);
+    }
+  }, []);
+
+  // PUBLIC_INTERFACE
+  function signIn() {
+    if (authInstance) {
+      authInstance.signIn().catch((e) => {
+        setError("Google sign-in failed.");
+      });
+    }
+  }
+  // PUBLIC_INTERFACE
+  function signOut() {
+    if (authInstance) {
+      authInstance.signOut();
+      setUser(null);
+      setSuccessMsg("");
+      setError("");
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  // Insert event: takes details and creates an event
+  async function createCalendarEvent({ summary, description, start, end, recurrence }) {
+    setError(""); setSuccessMsg("");
+    try {
+      // set default calendar to "primary"
+      const event = {
+        summary,
+        description,
+        start: { dateTime: start, timeZone: "Asia/Kolkata" },
+        end:   { dateTime: end, timeZone: "Asia/Kolkata" },
+        recurrence,
+      };
+      const response = await window.gapi.client.calendar.events.insert({
+        calendarId: "primary",
+        resource: event,
+      });
+      setSuccessMsg("Reminder added to Google Calendar!");
+      return response.result;
+    } catch (e) {
+      setError("Failed to add reminder: " + (e.result?.error?.message || e.message));
+      return null;
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  // Find event by `summary` or another property.
+  async function findEventBySummary(summary) {
+    setError("");
+    try {
+      const resp = await window.gapi.client.calendar.events.list({
+        calendarId: "primary",
+        q: summary,
+        maxResults: 5,
+        singleEvents: true,
+        orderBy: "startTime",
+        timeMin: new Date().toISOString(),
+      });
+      return resp.result.items || [];
+    } catch (e) {
+      setError("Error searching your calendar.");
+      return [];
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  // Remove event (by ID)
+  async function deleteEventById(eventId) {
+    setError(""); setSuccessMsg("");
+    try {
+      await window.gapi.client.calendar.events.delete({
+        calendarId: "primary",
+        eventId,
+      });
+      setSuccessMsg("Reminder removed from Google Calendar.");
+      return true;
+    } catch (e) {
+      setError("Failed to remove reminder: " + (e.result?.error?.message || e.message));
+      return false;
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  // Update event (by ID)
+  async function updateEventById(eventId, event) {
+    setError(""); setSuccessMsg("");
+    try {
+      const resp = await window.gapi.client.calendar.events.update({
+        calendarId: "primary",
+        eventId,
+        resource: event,
+      });
+      setSuccessMsg("Reminder updated.");
+      return resp.result;
+    } catch (e) {
+      setError("Failed to update reminder: " + (e.result?.error?.message || e.message));
+      return null;
+    }
+  }
+
+  return {
+    gapiLoaded,
+    signedIn,
+    user,
+    error, setError,
+    successMsg, setSuccessMsg,
+    signIn, signOut,
+    createCalendarEvent,
+    findEventBySummary,
+    deleteEventById,
+    updateEventById,
+  };
+}
+
 function App() {
   // --- USER FINANCE STATE ---
   // Holds: income, spending, savings
@@ -207,6 +382,33 @@ function App() {
     if (!frequency) setShowFreqModal(true);
   }, [frequency]);
   const startEditFrequency = () => setShowFreqModal(true);
+
+  // GOOGLE CALENDAR HOOKS—MUST BE TOP-LEVEL
+  const calendar = useGoogleCalendar();
+  const [reminderLoading, setReminderLoading] = useState({});
+  const [goalReminders, setGoalReminders] = useState({});
+
+  // On mount, if signed-in, fetch reminders and map by goal
+  useEffect(() => {
+    async function fetchReminders() {
+      if (calendar.signedIn && window.gapi) {
+        let all = {};
+        for (let goal of goals) {
+          const summary = `[Goalie] Save for ${goal.name}`;
+          const found = await calendar.findEventBySummary(summary);
+          if (found.length > 0) all[goal.id] = found[0];
+        }
+        setGoalReminders(all);
+      } else {
+        setGoalReminders({});
+      }
+    }
+    fetchReminders();
+    // eslint-disable-next-line
+  }, [calendar.signedIn, goals.length]);
+
+  // --- Income & Available Savings Logic ---
+  // Remove duplicate declaration here; keep only one after all hooks above.
 
   // --- Income & Available Savings Logic ---
 
@@ -423,6 +625,12 @@ function App() {
     );
   }
 
+  // --- GOOGLE CALENDAR INTEGRATION HOOK ---
+  // const calendar = useGoogleCalendar(); // <-- REMOVE duplicate declaration if present
+
+  // Track which goal's reminder is being set/removed/loading, for feedback per card
+  // (reminderLoading, goalReminders useState and related logic remain unchanged)
+
   // --- Main ---
   return (
     <div
@@ -476,6 +684,49 @@ function App() {
         }}>
           Savings Goal Companion
         </span>
+        {/* GOOGLE AUTH BUTTONS and INFO */}
+        {calendar.gapiLoaded && (
+          <>
+          {!calendar.signedIn ? (
+            <button
+              style={{
+                ...btnStyle,
+                background: "#fff",
+                color: COLORS.primary,
+                fontWeight: 600,
+                marginLeft: 22,
+                border: `2.2px solid ${COLORS.primary}`,
+              }}
+              onClick={calendar.signIn}
+              title="Connect Google Calendar"
+            >Connect Google Calendar</button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 22 }}>
+              <span style={{ fontSize: 13.5, color: "#fff" }}>
+                <b>{calendar.user?.getGivenName?.() || "Google User"}</b>
+                <span style={{ fontWeight: 400, marginLeft: 9, fontSize: 13, color: "#e2f6ff" }}>
+                  Calendar linked
+                </span>
+              </span>
+              <button
+                style={{
+                  ...btnStyle,
+                  border: "none",
+                  fontSize: 13.7,
+                  background: "#bbe5fa",
+                  color: "#1155d4",
+                  fontWeight: 600,
+                  padding: "5px 10px"
+                }}
+                onClick={calendar.signOut}
+                title="Disconnect Google Account"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+          </>
+        )}
         <button
           style={{
             ...btnStyle,
@@ -577,22 +828,137 @@ function App() {
               gap: 20
             }}>
               {goals.map(goal =>
-                <GoalCard
-                  key={goal.id}
-                  goal={goal}
-                  progress={getProgress(goal)}
-                  perPeriod={frequency ? getPerGoalPerPeriodAmount(goal) : null}
-                  periodLabel={getPeriodLabel()}
-                  onAddSavings={handleAddSavings}
-                  onDelete={() => handleDeleteGoal(goal.id)}
-                  onViewDetails={() => handleSelectGoal(goal)}
-                  accent={COLORS.accent}
-                  primary={COLORS.primary}
-                  secondary={COLORS.secondary}
-                  cardColor={COLORS.card}
-                />
+                <div key={goal.id} style={{ position: "relative"}}>
+                  <GoalCard
+                    goal={goal}
+                    progress={getProgress(goal)}
+                    perPeriod={frequency ? getPerGoalPerPeriodAmount(goal) : null}
+                    periodLabel={getPeriodLabel()}
+                    onAddSavings={handleAddSavings}
+                    onDelete={() => handleDeleteGoal(goal.id)}
+                    onViewDetails={() => handleSelectGoal(goal)}
+                    accent={COLORS.accent}
+                    primary={COLORS.primary}
+                    secondary={COLORS.secondary}
+                    cardColor={COLORS.card}
+                  />
+                  {/* Set/Remove Google Calendar Reminder */}
+                  <div style={{ position: "absolute", top: 15, right: 44 }}>
+                    {calendar.gapiLoaded && (
+                      <>
+                        {!calendar.signedIn ? (
+                          <button
+                            onClick={calendar.signIn}
+                            style={{
+                              ...btnStyle, background: "#f3faff", color: "#1155d4", fontSize: 12.5,
+                              border: `1.3px solid #b8cffa`, borderRadius: 6, marginTop: 4
+                            }}
+                            title="Connect Google Calendar for reminders"
+                          >Set Reminder (Login)</button>
+                        ) : (
+                          <>
+                          {!goalReminders[goal.id] ? (
+                            <button
+                              style={{
+                                ...btnStyle, background: COLORS.secondary,
+                                color: "#fff", fontWeight: 600,
+                                fontSize: 13.5, marginTop: 4, borderRadius: 7,
+                                padding: "6px 13px"
+                              }}
+                              disabled={reminderLoading[goal.id]}
+                              onClick={async () => {
+                                setReminderLoading(r => ({ ...r, [goal.id]: true }));
+                                // Compose event details:
+                                const freqChoice = frequency || "week";
+                                let rrule = "RRULE:FREQ=" + (freqChoice === "day" ? "DAILY" : (freqChoice === "week" ? "WEEKLY" : "MONTHLY"));
+                                const summary = `[Goalie] Save for ${goal.name}`;
+                                const descr = `Savings reminder for '${goal.name}' in Goalie.\nTarget: ₹${goal.target} by ${goal.deadline}.\n\nLog in to Goalie to update your progress!`;
+                                const nextReminderDate = (() => {
+                                  // First reminder = tomorrow morning
+                                  const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8,0,0,0); return d;
+                                })();
+                                const end = new Date(nextReminderDate); end.setMinutes(end.getMinutes() + 10);
+                                const event = {
+                                  summary,
+                                  description: descr,
+                                  start: nextReminderDate.toISOString(),
+                                  end: end.toISOString(),
+                                  recurrence: [rrule]
+                                };
+                                const res = await calendar.createCalendarEvent(event);
+                                // Store reminder mapping for UI
+                                if (res && res.id) setGoalReminders(gr => ({ ...gr, [goal.id]: res }));
+                                setReminderLoading(r => ({ ...r, [goal.id]: false }));
+                              }}
+                            >
+                              {reminderLoading[goal.id] ? "Setting..." : "Set Reminder"}
+                            </button>
+                          ) : (
+                            <button
+                              style={{
+                                ...btnStyle,
+                                background: "#fbe5e9",
+                                color: "#952b41",
+                                fontWeight: 600,
+                                fontSize: 13, marginTop: 4,
+                                borderRadius: 7,
+                                padding: "6px 13px"
+                              }}
+                              disabled={reminderLoading[goal.id]}
+                              onClick={async () => {
+                                setReminderLoading(r => ({ ...r, [goal.id]: true }));
+                                const eventId = goalReminders[goal.id]?.id;
+                                if (eventId) {
+                                  await calendar.deleteEventById(eventId);
+                                  setGoalReminders(gr => {
+                                    let out = { ...gr }; delete out[goal.id];
+                                    return out;
+                                  });
+                                }
+                                setReminderLoading(r => ({ ...r, [goal.id]: false }));
+                              }}
+                              title="Remove the Google Calendar reminder for this goal"
+                            >{reminderLoading[goal.id] ? "Removing..." : "Remove Reminder"}</button>
+                          )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
+          </div>
+          {/* Google Calendar Integration Feedback */}
+          <div style={{margin: "16px 0 0 0", minHeight: 20}}>
+            {calendar.error && (
+              <div style={{
+                background: "#fde2e2", color: "#ac4646",
+                border: "1.2px solid #eebcbb", borderRadius: 8,
+                padding: "7px 15px", margin: "6px 0",
+                fontWeight: 600
+              }}>
+                <span style={{marginRight: 7}}>❗</span>
+                {calendar.error}{" "}
+                <button onClick={() => calendar.setError("")} style={{
+                  background:'none', color:'#ca3232', border:'none', marginLeft: 6, cursor:"pointer"
+                }}>✕</button>
+              </div>
+            )}
+            {calendar.successMsg && (
+              <div style={{
+                background: "#e0f4e6", color: "#357d52",
+                border: "1.2px solid #baeec9", borderRadius: 8,
+                padding: "7px 15px", margin: "6px 0",
+                fontWeight: 600
+              }}>
+                <span style={{marginRight: 7}}>✅</span>
+                {calendar.successMsg}{" "}
+                <button onClick={() => calendar.setSuccessMsg("")} style={{
+                  background:'none', color:'#357d52', border:'none', marginLeft: 6, cursor:"pointer"
+                }}>✕</button>
+              </div>
+            )}
           </div>
           {/* Goal Creator */}
           <div style={{
